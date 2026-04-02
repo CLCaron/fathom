@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
+from fathom.config import settings
 from fathom.engine.pipeline import run_edgar_pipeline
 
 logger = logging.getLogger(__name__)
@@ -17,10 +18,10 @@ scheduler = AsyncIOScheduler()
 def setup_scheduler():
     """Configure and start the job scheduler."""
 
-    # SEC EDGAR Form 4 scraper — every 15 minutes during market hours
+    # SEC EDGAR Form 4 scraper
     scheduler.add_job(
         run_edgar_pipeline,
-        trigger=IntervalTrigger(minutes=15),
+        trigger=IntervalTrigger(minutes=settings.edgar_scrape_interval_minutes),
         id="edgar_scraper",
         name="SEC EDGAR Form 4 Scraper",
         replace_existing=True,

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Numeric, String, UniqueConstraint
+from sqlalchemy import Date, DateTime, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from fathom.models import Base
@@ -26,5 +26,9 @@ class CongressionalTrade(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("member_name", "ticker", "trade_date", "trade_type", "amount_min", name="uq_congress_trade"),
+        UniqueConstraint(
+            "member_name", "ticker", "trade_date", "trade_type", "amount_min",
+            name="uq_congress_trade",
+        ),
+        Index("ix_congress_member_ticker", "member_name", "ticker"),
     )

@@ -15,6 +15,7 @@ from fathom.models.dividend_event import DividendEvent
 from fathom.models.event_tag import EventTag
 from fathom.models.signal import Signal
 from fathom.models.signal_performance import SignalPerformance
+from fathom.models.sector_cache import SectorCache
 
 __all__ = [
     "Base",
@@ -29,4 +30,5 @@ __all__ = [
     "EventTag",
     "Signal",
     "SignalPerformance",
+    "SectorCache",
 ]

@@ -1,4 +1,4 @@
-"""Data pipeline: scrape → normalize → store.
+"""Data pipeline: scrape -> normalize -> store.
 
 Phase 1 focuses on EDGAR insider trades and stock prices.
 Correlation engine will be added in Phase 2.
@@ -7,14 +7,16 @@ Correlation engine will be added in Phase 2.
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import yfinance as yf
 from sqlalchemy import select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fathom.config import settings
 from fathom.database import async_session
 from fathom.models.insider_trade import InsiderTrade
+from fathom.models.sector_cache import SectorCache
 from fathom.models.stock_price import StockPrice
 from fathom.scrapers.edgar import EdgarScraper, InsiderTradeItem
 from fathom.scrapers.stock_prices import StockPriceItem, fetch_stock_prices
@@ -70,10 +72,61 @@ SECTOR_MAP = {
 }
 
 
-def resolve_sector(ticker: str | None) -> str | None:
+async def resolve_sector(session: AsyncSession, ticker: str | None) -> str | None:
+    """Resolve a ticker's sector using hardcoded map, cache, or yfinance fallback."""
     if not ticker:
         return None
-    return SECTOR_MAP.get(ticker.upper())
+
+    upper = ticker.upper()
+
+    # Fast path: hardcoded map
+    if upper in SECTOR_MAP:
+        return SECTOR_MAP[upper]
+
+    # Check cache
+    result = await session.execute(
+        select(SectorCache).where(SectorCache.ticker == upper)
+    )
+    cached = result.scalar_one_or_none()
+
+    if cached:
+        ttl = timedelta(days=settings.sector_cache_ttl_days)
+        if datetime.utcnow() - cached.fetched_at < ttl:
+            return cached.sector
+
+    # yfinance fallback
+    sector = await _lookup_sector_yfinance(upper)
+
+    # Upsert into cache
+    if cached:
+        cached.sector = sector
+        cached.source = "yfinance"
+        cached.fetched_at = datetime.utcnow()
+    else:
+        session.add(SectorCache(
+            ticker=upper,
+            sector=sector,
+            source="yfinance",
+            fetched_at=datetime.utcnow(),
+        ))
+
+    return sector
+
+
+async def _lookup_sector_yfinance(ticker: str) -> str | None:
+    """Look up a ticker's sector via yfinance (runs in thread pool)."""
+    loop = asyncio.get_event_loop()
+
+    def _fetch():
+        try:
+            info = yf.Ticker(ticker).info
+            return info.get("sector")
+        except Exception:
+            logger.debug(f"yfinance sector lookup failed for {ticker}")
+            return None
+
+    with ThreadPoolExecutor() as pool:
+        return await loop.run_in_executor(pool, _fetch)
 
 
 async def run_edgar_pipeline():
@@ -109,7 +162,7 @@ async def run_edgar_pipeline():
 
 async def _store_insider_trade(session: AsyncSession, item: InsiderTradeItem) -> bool:
     """Store an insider trade, returning True if it was new."""
-    sector = resolve_sector(item.ticker)
+    sector = await resolve_sector(session, item.ticker)
 
     # Check for existing record
     existing = await session.execute(
@@ -147,7 +200,9 @@ async def _fetch_and_store_prices(tickers: list[str]):
     """Fetch and store stock prices for given tickers."""
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
-        items = await loop.run_in_executor(pool, fetch_stock_prices, tickers)
+        items = await loop.run_in_executor(
+            pool, fetch_stock_prices, tickers, settings.price_lookback_days
+        )
 
     async with async_session() as session:
         for item in items:

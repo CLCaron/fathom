@@ -20,29 +20,31 @@ from fathom.scrapers.stock_prices import StockPriceItem
 
 
 class TestResolveSector:
-    def test_known_ticker(self):
-        assert resolve_sector("AAPL") == "Technology"
-        assert resolve_sector("JPM") == "Finance"
-        assert resolve_sector("XOM") == "Energy"
+    async def test_known_ticker(self, db_session):
+        assert await resolve_sector(db_session, "AAPL") == "Technology"
+        assert await resolve_sector(db_session, "JPM") == "Finance"
+        assert await resolve_sector(db_session, "XOM") == "Energy"
 
-    def test_unknown_ticker(self):
-        assert resolve_sector("ZZZZ") is None
+    async def test_unknown_ticker_returns_none(self, db_session):
+        with patch("fathom.engine.pipeline._lookup_sector_yfinance", new_callable=AsyncMock, return_value=None):
+            result = await resolve_sector(db_session, "ZZZZ")
+        assert result is None
 
-    def test_none_ticker(self):
-        assert resolve_sector(None) is None
+    async def test_none_ticker(self, db_session):
+        assert await resolve_sector(db_session, None) is None
 
-    def test_case_insensitive(self):
-        assert resolve_sector("aapl") == "Technology"
-        assert resolve_sector("Aapl") == "Technology"
+    async def test_case_insensitive(self, db_session):
+        assert await resolve_sector(db_session, "aapl") == "Technology"
+        assert await resolve_sector(db_session, "Aapl") == "Technology"
 
-    def test_new_sectors_exist(self):
-        """Verify newly added sectors are present."""
-        assert resolve_sector("CSCO") == "Technology"
-        assert resolve_sector("MRVL") == "Semiconductors"
-        assert resolve_sector("T") == "Telecom"
-        assert resolve_sector("BMY") == "Healthcare"
-        assert resolve_sector("SBUX") == "Consumer"
-        assert resolve_sector("AXP") == "Finance"
+    async def test_new_sectors_exist(self, db_session):
+        """Verify newly added sectors are present in the hardcoded map."""
+        assert await resolve_sector(db_session, "CSCO") == "Technology"
+        assert await resolve_sector(db_session, "MRVL") == "Semiconductors"
+        assert await resolve_sector(db_session, "T") == "Telecom"
+        assert await resolve_sector(db_session, "BMY") == "Healthcare"
+        assert await resolve_sector(db_session, "SBUX") == "Consumer"
+        assert await resolve_sector(db_session, "AXP") == "Finance"
 
 
 class TestSectorMapConsistency:
@@ -112,7 +114,7 @@ class TestStoreInsiderTrade:
         assert second is False
 
     async def test_unknown_sector_stored_as_none(self, db_session):
-        """Trade with unknown ticker should have sector=None."""
+        """Trade with unknown ticker should have sector=None when yfinance returns None."""
         item = InsiderTradeItem(
             source="edgar",
             cik="999999",
@@ -129,7 +131,8 @@ class TestStoreInsiderTrade:
             filing_url=None,
         )
 
-        await _store_insider_trade(db_session, item)
+        with patch("fathom.engine.pipeline._lookup_sector_yfinance", new_callable=AsyncMock, return_value=None):
+            await _store_insider_trade(db_session, item)
         await db_session.flush()
 
         rows = await db_session.execute(select(InsiderTrade))

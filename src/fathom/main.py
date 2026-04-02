@@ -3,6 +3,8 @@
 import logging
 from contextlib import asynccontextmanager
 
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -10,7 +12,6 @@ from fathom.api.signals import router as signals_router
 from fathom.api.admin import router as admin_router
 from fathom.config import settings
 from fathom.database import engine
-from fathom.models import Base
 from fathom.scheduler.jobs import scheduler, setup_scheduler
 
 logging.basicConfig(
@@ -20,13 +21,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def run_migrations():
+    """Run Alembic migrations to bring the database schema up to date.
+
+    Must be called from a thread (not the async event loop) because Alembic's
+    async env.py uses asyncio.run() internally, which cannot nest inside an
+    already-running loop.
+    """
+    alembic_cfg = AlembicConfig("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Create tables if they don't exist
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables ready")
+    # Run migrations in a thread to avoid asyncio.run() nesting inside the event loop
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, run_migrations)
+    logger.info("Database migrations complete")
+
+    if "user@example.com" in settings.sec_edgar_user_agent:
+        logger.warning(
+            "SEC EDGAR user agent is still the default placeholder. "
+            "Set SEC_EDGAR_USER_AGENT in .env to your real contact info."
+        )
 
     # Start the scheduler
     setup_scheduler()

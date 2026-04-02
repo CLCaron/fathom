@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, Numeric, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fathom.models import Base
 
@@ -20,3 +22,5 @@ class Signal(Base):
     detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     price_at_detection: Mapped[float | None] = mapped_column(Numeric(12, 4))
     sector_etf_price: Mapped[float | None] = mapped_column(Numeric(12, 4))
+
+    performance_checks: Mapped[list[SignalPerformance]] = relationship(back_populates="signal")

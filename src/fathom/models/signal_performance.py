@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import date
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fathom.models import Base
 
@@ -19,3 +21,9 @@ class SignalPerformance(Base):
     outperformed: Mapped[bool | None] = mapped_column(Boolean)
     signal_played_out: Mapped[bool | None] = mapped_column(Boolean)
     notes: Mapped[str | None] = mapped_column(Text)
+
+    signal: Mapped[Signal] = relationship(back_populates="performance_checks")
+
+    __table_args__ = (
+        Index("ix_sigperf_signal_date", "signal_id", "check_date"),
+    )

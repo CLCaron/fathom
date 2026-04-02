@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fathom.config import settings
 from fathom.database import get_session
 from fathom.models.insider_trade import InsiderTrade
 from fathom.models.signal import Signal
@@ -22,7 +23,7 @@ async def dashboard(
     session: AsyncSession = Depends(get_session),
     sector: str | None = None,
     trade_type: str | None = None,
-    days: int = Query(default=7, ge=1, le=90),
+    days: int = Query(default=7, ge=1, le=settings.dashboard_max_days),
 ):
     """Main dashboard page showing recent insider trades."""
     since = date.today() - timedelta(days=days)
@@ -38,7 +39,7 @@ async def dashboard(
     if trade_type:
         query = query.where(InsiderTrade.trade_type == trade_type)
 
-    query = query.limit(100)
+    query = query.limit(settings.dashboard_trade_limit)
     result = await session.execute(query)
     trades = result.scalars().all()
 
@@ -96,7 +97,7 @@ async def trades_partial(
     session: AsyncSession = Depends(get_session),
     sector: str | None = None,
     trade_type: str | None = None,
-    days: int = Query(default=7, ge=1, le=90),
+    days: int = Query(default=7, ge=1, le=settings.dashboard_max_days),
 ):
     """HTMX partial: returns just the trades table rows."""
     since = date.today() - timedelta(days=days)
@@ -112,7 +113,7 @@ async def trades_partial(
     if trade_type:
         query = query.where(InsiderTrade.trade_type == trade_type)
 
-    query = query.limit(100)
+    query = query.limit(settings.dashboard_trade_limit)
     result = await session.execute(query)
     trades = result.scalars().all()
 

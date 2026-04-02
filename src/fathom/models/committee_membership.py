@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import JSON, Date, String
+from sqlalchemy import JSON, Date, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from fathom.models import Base
@@ -19,3 +19,10 @@ class CommitteeMembership(Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
     sectors_covered: Mapped[list | None] = mapped_column(JSON, default=list)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "member_name", "committee_code", "congress_number",
+            name="uq_committee_membership",
+        ),
+    )

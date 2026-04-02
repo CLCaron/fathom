@@ -8,6 +8,17 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
+    # Pipeline
+    price_lookback_days: int = 5
+    sector_cache_ttl_days: int = 30
+
+    # Scheduler
+    edgar_scrape_interval_minutes: int = 15
+
+    # Dashboard
+    dashboard_trade_limit: int = 100
+    dashboard_max_days: int = 90
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
