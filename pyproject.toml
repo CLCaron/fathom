@@ -1,0 +1,42 @@
+[project]
+name = "fathom"
+version = "0.1.0"
+description = "Financial research tool connecting insider trades, congressional trades, and market events to historical patterns"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.14.0",
+    "aiosqlite>=0.20.0",
+    "httpx>=0.28.0",
+    "pandas>=2.2.0",
+    "numpy>=2.0.0",
+    "yfinance>=0.2.40",
+    "apscheduler>=3.10.0",
+    "pydantic-settings>=2.6.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+    "rapidfuzz>=3.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:yfinance",
+]

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Admin - Financial Signals{% endblock %}
+
+{% block content %}
+<div class="admin">
+    <h2>Admin Panel</h2>
+
+    <div class="admin-section">
+        <h3>Database Stats</h3>
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.insider_trades }}</div>
+                <div class="stat-label">Insider Trades</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.stock_prices }}</div>
+                <div class="stat-label">Price Records</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-section">
+        <h3>Scrapers</h3>
+        <div class="scraper-controls">
+            <div class="scraper-card">
+                <div class="scraper-info">
+                    <strong>SEC EDGAR Form 4</strong>
+                    <p>Insider trade filings (buys, sells, exercises)</p>
+                </div>
+                <button class="btn"
+                        hx-post="/admin/run/edgar_scraper"
+                        hx-target="#edgar-result"
+                        hx-swap="innerHTML"
+                        hx-indicator="#edgar-spinner">
+                    Run Now
+                </button>
+                <span id="edgar-spinner" class="htmx-indicator">Running...</span>
+                <div id="edgar-result" class="scraper-result"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

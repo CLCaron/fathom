@@ -1,0 +1,43 @@
+{% if trades %}
+<table class="trades-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Insider</th>
+            <th>Title</th>
+            <th>Company</th>
+            <th>Ticker</th>
+            <th>Type</th>
+            <th>Shares</th>
+            <th>Price</th>
+            <th>Value</th>
+            <th>Sector</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for trade in trades %}
+        <tr class="trade-row trade-{{ trade.trade_type | lower }}">
+            <td>{{ trade.trade_date.strftime('%Y-%m-%d') }}</td>
+            <td>{{ trade.filer_name }}</td>
+            <td>{{ trade.filer_title or '-' }}</td>
+            <td>{{ trade.company_name }}</td>
+            <td class="ticker">{{ trade.ticker or '-' }}</td>
+            <td>
+                <span class="badge badge-{{ trade.trade_type | lower }}">
+                    {{ trade.trade_type }}
+                </span>
+            </td>
+            <td class="num">{{ "{:,}".format(trade.shares) if trade.shares else '-' }}</td>
+            <td class="num">{{ "${:,.2f}".format(trade.price_per_share) if trade.price_per_share else '-' }}</td>
+            <td class="num">{{ "${:,.0f}".format(trade.total_value) if trade.total_value else '-' }}</td>
+            <td>{{ trade.sector or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>No insider trades found for this period.</p>
+    <p>Try running the EDGAR scraper from the Admin page, or expand the time range.</p>
+</div>
+{% endif %}

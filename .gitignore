@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+data/
+*.db
+.venv/
+venv/
+
+# Claude/AI working files
+CLAUDE.md
+specs/
+docs/
+.claude/
