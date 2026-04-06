@@ -9,13 +9,21 @@ from fathom.scheduler.jobs import scheduler, setup_scheduler, run_job_now
 class TestSetupScheduler:
     def test_edgar_job_registered(self):
         """setup_scheduler should register the edgar_scraper job."""
-        # Ensure scheduler is clean before test
         scheduler.remove_all_jobs()
         setup_scheduler()
 
         jobs = {job.id: job for job in scheduler.get_jobs()}
         assert "edgar_scraper" in jobs
         assert "SEC EDGAR Form 4 Scraper" == jobs["edgar_scraper"].name
+
+    def test_congressional_job_registered(self):
+        """setup_scheduler should register the congressional_scraper job."""
+        scheduler.remove_all_jobs()
+        setup_scheduler()
+
+        jobs = {job.id: job for job in scheduler.get_jobs()}
+        assert "congressional_scraper" in jobs
+        assert "Capitol Trades" in jobs["congressional_scraper"].name
 
     def test_job_interval_uses_settings(self):
         """Job interval should match settings.edgar_scrape_interval_minutes."""
@@ -38,6 +46,15 @@ class TestRunJobNow:
         mock_pipeline.assert_called_once()
         assert "completed" in result
         assert "5" in result
+
+    async def test_congressional_job_runs(self):
+        """run_job_now with congressional_scraper should call the pipeline."""
+        with patch("fathom.scheduler.jobs.run_congressional_pipeline", new_callable=AsyncMock, return_value=10) as mock_pipeline:
+            result = await run_job_now("congressional_scraper")
+
+        mock_pipeline.assert_called_once()
+        assert "completed" in result
+        assert "10" in result
 
     async def test_unknown_job_returns_error(self):
         """run_job_now with an unknown job ID should return an error string."""

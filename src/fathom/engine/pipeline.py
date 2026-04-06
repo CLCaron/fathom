@@ -1,8 +1,4 @@
-"""Data pipeline: scrape -> normalize -> store.
-
-Phase 1 focuses on EDGAR insider trades and stock prices.
-Correlation engine will be added in Phase 2.
-"""
+"""Data pipeline: scrape -> normalize -> store."""
 
 import asyncio
 import logging
@@ -15,10 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fathom.config import settings
 from fathom.database import async_session
+from fathom.models.committee_membership import CommitteeMembership
+from fathom.models.congressional_trade import CongressionalTrade
 from fathom.models.insider_trade import InsiderTrade
+from fathom.models.legislation import Legislation, LegislationVote
 from fathom.models.sector_cache import SectorCache
 from fathom.models.stock_price import StockPrice
+from fathom.scrapers.capitol_trades import CapitolTradesScraper, CongressionalTradeItem
+from fathom.scrapers.committees import CommitteeScraper, CommitteeMembershipItem
 from fathom.scrapers.edgar import EdgarScraper, InsiderTradeItem
+from fathom.scrapers.legislation import BillItem, LegislationScraper, VoteItem
 from fathom.scrapers.stock_prices import StockPriceItem, fetch_stock_prices
 
 logger = logging.getLogger(__name__)
@@ -229,3 +231,230 @@ async def _fetch_and_store_prices(tickers: list[str]):
         await session.commit()
 
     logger.info(f"Stored prices for {len(tickers)} tickers")
+
+
+async def run_congressional_pipeline():
+    """Scrape Capitol Trades and store congressional trades."""
+    scraper = CapitolTradesScraper(lookback_days=settings.dashboard_max_days)
+
+    try:
+        items = await scraper.scrape()
+        if not items:
+            logger.info("No new congressional trades found")
+            return 0
+
+        new_count = 0
+        async with async_session() as session:
+            for item in items:
+                new = await _store_congressional_trade(session, item)
+                if new:
+                    new_count += 1
+            await session.commit()
+
+        logger.info(
+            f"Stored {new_count} new congressional trades (of {len(items)} scraped)"
+        )
+        return new_count
+
+    finally:
+        await scraper.close()
+
+
+async def _store_congressional_trade(
+    session: AsyncSession, item: CongressionalTradeItem
+) -> bool:
+    """Store a congressional trade, returning True if it was new."""
+    # Use Capitol Trades sector if available, fall back to resolve_sector
+    sector = item.sector
+    if not sector and item.ticker:
+        sector = await resolve_sector(session, item.ticker)
+
+    # Check for existing record (matches unique constraint)
+    existing = await session.execute(
+        select(CongressionalTrade).where(
+            CongressionalTrade.member_name == item.member_name,
+            CongressionalTrade.ticker == item.ticker,
+            CongressionalTrade.trade_date == item.trade_date,
+            CongressionalTrade.trade_type == item.trade_type,
+            CongressionalTrade.amount_min == item.amount_min,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return False
+
+    trade = CongressionalTrade(
+        member_name=item.member_name,
+        chamber=item.chamber,
+        state=item.state,
+        party=item.party,
+        ticker=item.ticker,
+        asset_name=item.asset_name,
+        trade_type=item.trade_type,
+        amount_min=item.amount_min,
+        amount_max=item.amount_max,
+        trade_date=item.trade_date,
+        disclosure_date=item.disclosure_date,
+        source_url=item.source_url,
+        sector=sector,
+    )
+    session.add(trade)
+    return True
+
+
+async def run_committees_pipeline():
+    """Scrape congress.gov and store/update committee memberships."""
+    scraper = CommitteeScraper()
+
+    try:
+        items = await scraper.scrape()
+        if not items:
+            logger.info("No committee memberships found (API key missing?)")
+            return 0
+
+        new_count = 0
+        updated_count = 0
+        async with async_session() as session:
+            for item in items:
+                is_new, is_updated = await _upsert_committee_membership(session, item)
+                if is_new:
+                    new_count += 1
+                if is_updated:
+                    updated_count += 1
+            await session.commit()
+
+        logger.info(
+            f"Committees: {new_count} new, {updated_count} updated "
+            f"(of {len(items)} scraped)"
+        )
+        return new_count + updated_count
+
+    finally:
+        await scraper.close()
+
+
+async def _upsert_committee_membership(
+    session: AsyncSession, item: CommitteeMembershipItem
+) -> tuple[bool, bool]:
+    """Upsert a committee membership. Returns (is_new, is_updated)."""
+    existing = await session.execute(
+        select(CommitteeMembership).where(
+            CommitteeMembership.member_name == item.member_name,
+            CommitteeMembership.committee_code == item.committee_code,
+            CommitteeMembership.congress_number == item.congress_number,
+        )
+    )
+    record = existing.scalar_one_or_none()
+
+    if record:
+        changed = False
+        if record.role != item.role:
+            record.role = item.role
+            changed = True
+        if record.sectors_covered != item.sectors_covered:
+            record.sectors_covered = item.sectors_covered
+            changed = True
+        return False, changed
+
+    membership = CommitteeMembership(
+        member_name=item.member_name,
+        chamber=item.chamber,
+        committee_code=item.committee_code,
+        committee_name=item.committee_name,
+        role=item.role,
+        congress_number=item.congress_number,
+        sectors_covered=item.sectors_covered,
+    )
+    session.add(membership)
+    return True, False
+
+
+async def run_legislation_pipeline():
+    """Scrape congress.gov and store bills and votes."""
+    scraper = LegislationScraper()
+
+    try:
+        bills, votes = await scraper.scrape()
+        if not bills and not votes:
+            logger.info("No legislation data found (API key missing?)")
+            return 0
+
+        bill_count = 0
+        vote_count = 0
+        async with async_session() as session:
+            for bill in bills:
+                is_new = await _upsert_bill(session, bill)
+                if is_new:
+                    bill_count += 1
+
+            for vote in votes:
+                is_new = await _store_vote(session, vote)
+                if is_new:
+                    vote_count += 1
+
+            await session.commit()
+
+        logger.info(f"Legislation: {bill_count} bills, {vote_count} votes stored")
+        return bill_count + vote_count
+
+    finally:
+        await scraper.close()
+
+
+async def _upsert_bill(session: AsyncSession, item: BillItem) -> bool:
+    """Upsert a bill. Returns True if new or updated."""
+    existing = await session.execute(
+        select(Legislation).where(Legislation.bill_id == item.bill_id)
+    )
+    record = existing.scalar_one_or_none()
+
+    if record:
+        record.status = item.status
+        record.last_action_date = item.last_action_date
+        if item.sectors_affected:
+            record.sectors_affected = item.sectors_affected
+        return False
+
+    bill = Legislation(
+        bill_id=item.bill_id,
+        title=item.title,
+        summary=item.summary,
+        congress_number=item.congress_number,
+        introduced_date=item.introduced_date,
+        last_action_date=item.last_action_date,
+        status=item.status,
+        sectors_affected=item.sectors_affected,
+        sponsor_name=item.sponsor_name,
+        bill_url=item.bill_url,
+    )
+    session.add(bill)
+    return True
+
+
+async def _store_vote(session: AsyncSession, item: VoteItem) -> bool:
+    """Store a vote record, returning True if new."""
+    existing = await session.execute(
+        select(LegislationVote).where(
+            LegislationVote.bill_id == item.bill_id,
+            LegislationVote.member_name == item.member_name,
+            LegislationVote.vote_date == item.vote_date,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return False
+
+    # Only store if the bill exists (FK constraint)
+    bill_exists = await session.execute(
+        select(Legislation.bill_id).where(Legislation.bill_id == item.bill_id)
+    )
+    if not bill_exists.scalar_one_or_none():
+        return False
+
+    vote = LegislationVote(
+        bill_id=item.bill_id,
+        member_name=item.member_name,
+        chamber=item.chamber,
+        vote=item.vote,
+        vote_date=item.vote_date,
+    )
+    session.add(vote)
+    return True

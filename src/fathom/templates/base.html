@@ -12,7 +12,8 @@
     <nav class="navbar">
         <div class="nav-brand">Financial Signals</div>
         <div class="nav-links">
-            <a href="/" class="nav-link{% if request.url.path == '/' %} active{% endif %}">Dashboard</a>
+            <a href="/" class="nav-link{% if request.url.path == '/' %} active{% endif %}">Insider Trades</a>
+            <a href="/congressional" class="nav-link{% if '/congressional' in request.url.path %} active{% endif %}">Congressional</a>
             <a href="/admin" class="nav-link{% if '/admin' in request.url.path %} active{% endif %}">Admin</a>
         </div>
     </nav>

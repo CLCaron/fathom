@@ -1,0 +1,66 @@
+{% if trades %}
+<table class="trades-table">
+    <thead>
+        <tr>
+            <th>Trade Date</th>
+            <th>Member</th>
+            <th>Party</th>
+            <th>Chamber</th>
+            <th>Ticker</th>
+            <th>Asset</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Sector</th>
+            <th>Disclosed</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for trade in trades %}
+        <tr class="trade-row trade-{{ trade.trade_type | lower }}">
+            <td>{{ trade.trade_date.strftime('%Y-%m-%d') if trade.trade_date else '-' }}</td>
+            <td>{{ trade.member_name }}</td>
+            <td>
+                {% if trade.party == 'Republican' %}
+                <span class="badge badge-republican">R</span>
+                {% elif trade.party == 'Democrat' %}
+                <span class="badge badge-democrat">D</span>
+                {% else %}
+                {{ trade.party or '-' }}
+                {% endif %}
+            </td>
+            <td>{{ trade.chamber | title }}</td>
+            <td class="ticker">{{ trade.ticker or '-' }}</td>
+            <td>{{ trade.asset_name or '-' }}</td>
+            <td>
+                <span class="badge badge-{{ trade.trade_type | lower }}">
+                    {{ trade.trade_type }}
+                </span>
+            </td>
+            <td class="num">
+                {% if trade.amount_min and trade.amount_max %}
+                ${{ "{:,.0f}".format(trade.amount_min) }}-${{ "{:,.0f}".format(trade.amount_max) }}
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            <td>{{ trade.sector or '-' }}</td>
+            <td>
+                {% if trade.disclosure_date %}
+                {{ trade.disclosure_date.strftime('%Y-%m-%d') }}
+                {% if trade.trade_date %}
+                <span class="text-muted">({{ (trade.disclosure_date - trade.trade_date).days }}d)</span>
+                {% endif %}
+                {% else %}
+                -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>No congressional trades found for this period.</p>
+    <p>Try running the Capitol Trades scraper from the Admin page, or expand the time range.</p>
+</div>
+{% endif %}

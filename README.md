@@ -4,21 +4,29 @@ A financial research tool that connects insider trades, congressional trades, an
 
 ## What It Does
 
-**Trade tracking:**
+**Insider trade tracking:**
 - Scrapes SEC EDGAR for insider trade filings (Form 4) across major companies
 - Tracks stock prices for context and performance measurement
-- Displays trades in a filterable dashboard with sector, type, and time range filters
-- Runs on a schedule to pull new data automatically
+- Filterable dashboard with sector, type, and time range filters
+
+**Congressional trade tracking:**
+- Scrapes Capitol Trades for House and Senate STOCK Act disclosures
+- Committee membership data from congress.gov (with sector coverage mapping)
+- Legislation tracking with keyword-based sector tagging
+- Dedicated congressional trades dashboard with chamber, party, and sector filters
+
+**Automated scheduling:**
+- SEC EDGAR scraper runs every 15 minutes
+- Capitol Trades scraper runs daily
+- Committee and legislation scrapers run on configurable intervals
+- All scrapers can be triggered manually from the admin page
 
 **Planned:**
-- Congressional trade tracking with committee oversight and legislation timing correlations
+- Correlation engine linking congressional trades to committee oversight and legislation timing
 - Event analysis system: log a news event and see how similar events played out historically
-- Market context engine that makes historical comparisons meaningful (matching on market conditions, not just event type)
+- Market context engine for meaningful historical comparisons
 - Trade clustering detection (multiple actors, same sector, same timeframe)
-- ETF fund flow anomaly detection
 - Historical pattern matching with multi-timeframe analysis (7d, 30d, 90d)
-- Signal accuracy tracking and performance scorecards
-- Inline education throughout (explains what you're looking at with links to learn more)
 
 ## Setup
 
@@ -43,7 +51,7 @@ Copy the example environment file and update it:
 cp .env.example .env
 ```
 
-The default settings work out of the box. Update `SEC_EDGAR_USER_AGENT` with your name and email (SEC requires this for API access).
+The default settings work out of the box. Update `SEC_EDGAR_USER_AGENT` with your name and email (SEC requires this for API access). Optionally add a `CONGRESS_API_KEY` from congress.gov for committee and legislation data.
 
 ### Run
 
@@ -55,21 +63,17 @@ Open http://127.0.0.1:8000 in your browser.
 
 ## Usage
 
-### Dashboard
+### Insider Trades
 
-The main page shows recent insider trades with filters for:
+The main page shows recent insider trades with filters for time range, trade type, and sector.
 
-- **Time range** - today, 7 days, 14 days, 30 days, 90 days
-- **Trade type** - buys, sells, or all
-- **Sector** - technology, energy, defense, finance, healthcare, consumer, industrial, etc.
+### Congressional Trades
+
+http://127.0.0.1:8000/congressional shows congressional stock trades with filters for chamber, party, trade type, and sector. Committee memberships and legislation are available as sub-pages.
 
 ### Admin
 
-http://127.0.0.1:8000/admin shows database stats and lets you manually trigger scrapers.
-
-### Scheduler
-
-The app runs an automated scheduler that pulls new SEC filings every 15 minutes while the server is running.
+http://127.0.0.1:8000/admin shows database stats and lets you manually trigger any scraper. Buttons show loading state and formatted results.
 
 ## Tech Stack
 
@@ -85,8 +89,9 @@ The app runs an automated scheduler that pulls new SEC filings every 15 minutes 
 | Source | What | Cost |
 |--------|------|------|
 | SEC EDGAR | Insider trade filings (Form 4) | Free |
+| Capitol Trades | Congressional stock trades (STOCK Act) | Free |
+| congress.gov | Committee memberships, legislation, votes | Free (API key) |
 | yfinance | Daily stock prices, VIX, sector ETFs | Free |
-| congress.gov | Congressional trades, committees, votes (planned) | Free |
 | FRED | Economic indicators, interest rates (planned) | Free |
 | NewsAPI / RSS | News events (planned) | Free tier |
 
@@ -94,7 +99,7 @@ The app runs an automated scheduler that pulls new SEC filings every 15 minutes 
 
 ```
 financial-signals/
-├── src/signals/
+├── src/fathom/
 │   ├── models/        # Database models
 │   ├── scrapers/      # Data collection
 │   ├── engine/        # Pipeline, correlation, scoring

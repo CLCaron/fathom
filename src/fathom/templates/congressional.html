@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Congressional Trades - Financial Signals{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total Trades</div>
+        </div>
+        <div class="stat-card stat-buy">
+            <div class="stat-value">{{ stats.purchases }}</div>
+            <div class="stat-label">Purchases</div>
+        </div>
+        <div class="stat-card stat-sell">
+            <div class="stat-value">{{ stats.sales }}</div>
+            <div class="stat-label">Sales</div>
+        </div>
+    </div>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form id="filter-form" hx-get="/api/congressional-trades" hx-target="#trades-table" hx-swap="innerHTML">
+                <div class="filter-group">
+                    <label>Time Range</label>
+                    <select name="days" onchange="this.form.requestSubmit()">
+                        <option value="7" {% if filters.days == 7 %}selected{% endif %}>Last 7 days</option>
+                        <option value="14" {% if filters.days == 14 %}selected{% endif %}>Last 14 days</option>
+                        <option value="30" {% if filters.days == 30 %}selected{% endif %}>Last 30 days</option>
+                        <option value="60" {% if filters.days == 60 %}selected{% endif %}>Last 60 days</option>
+                        <option value="90" {% if filters.days == 90 %}selected{% endif %}>Last 90 days</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Chamber</label>
+                    <select name="chamber" onchange="this.form.requestSubmit()">
+                        <option value="">All</option>
+                        <option value="HOUSE" {% if filters.chamber == 'HOUSE' %}selected{% endif %}>House</option>
+                        <option value="SENATE" {% if filters.chamber == 'SENATE' %}selected{% endif %}>Senate</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Party</label>
+                    <select name="party" onchange="this.form.requestSubmit()">
+                        <option value="">All</option>
+                        <option value="Republican" {% if filters.party == 'Republican' %}selected{% endif %}>Republican</option>
+                        <option value="Democrat" {% if filters.party == 'Democrat' %}selected{% endif %}>Democrat</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Trade Type</label>
+                    <select name="trade_type" onchange="this.form.requestSubmit()">
+                        <option value="">All</option>
+                        <option value="PURCHASE" {% if filters.trade_type == 'PURCHASE' %}selected{% endif %}>Purchases</option>
+                        <option value="SALE" {% if filters.trade_type == 'SALE' %}selected{% endif %}>Sales</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Sector</label>
+                    <select name="sector" onchange="this.form.requestSubmit()">
+                        <option value="">All Sectors</option>
+                        {% for sector_name, count in sector_counts %}
+                        <option value="{{ sector_name }}" {% if filters.sector == sector_name %}selected{% endif %}>
+                            {{ sector_name }} ({{ count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </aside>
+
+        <section class="main-content">
+            <div class="section-header">
+                <h2>Congressional Trades</h2>
+                <button class="btn btn-sm"
+                        hx-post="/admin/run/congressional_scraper"
+                        hx-swap="none"
+                        onclick="this.textContent='Scraping...'; this.disabled=true; setTimeout(() => { this.textContent='Refresh Data'; this.disabled=false; htmx.trigger('#trades-table', 'load'); }, 10000)">
+                    Refresh Data
+                </button>
+            </div>
+
+            <div id="trades-table">
+                {% include "components/congressional_table.html" %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

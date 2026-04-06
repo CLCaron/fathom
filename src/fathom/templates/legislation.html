@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Legislation - Financial Signals{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value">{{ bills | length }}</div>
+            <div class="stat-label">Bills Tracked</div>
+        </div>
+    </div>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form method="get" action="/congressional/legislation">
+                <div class="filter-group">
+                    <label>Sector</label>
+                    <select name="sector" onchange="this.form.submit()">
+                        <option value="">All Sectors</option>
+                        <option value="Defense" {% if filters.sector == 'Defense' %}selected{% endif %}>Defense</option>
+                        <option value="Energy" {% if filters.sector == 'Energy' %}selected{% endif %}>Energy</option>
+                        <option value="Finance" {% if filters.sector == 'Finance' %}selected{% endif %}>Finance</option>
+                        <option value="Healthcare" {% if filters.sector == 'Healthcare' %}selected{% endif %}>Healthcare</option>
+                        <option value="Technology" {% if filters.sector == 'Technology' %}selected{% endif %}>Technology</option>
+                        <option value="Consumer" {% if filters.sector == 'Consumer' %}selected{% endif %}>Consumer</option>
+                        <option value="Industrial" {% if filters.sector == 'Industrial' %}selected{% endif %}>Industrial</option>
+                    </select>
+                </div>
+            </form>
+        </aside>
+
+        <section class="main-content">
+            <div class="section-header">
+                <h2>Legislation</h2>
+            </div>
+
+            {% if bills %}
+            <table class="trades-table">
+                <thead>
+                    <tr>
+                        <th>Bill ID</th>
+                        <th>Title</th>
+                        <th>Sponsor</th>
+                        <th>Introduced</th>
+                        <th>Last Action</th>
+                        <th>Status</th>
+                        <th>Sectors</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bill in bills %}
+                    <tr class="trade-row">
+                        <td>
+                            {% if bill.bill_url %}
+                            <a href="{{ bill.bill_url }}" target="_blank" style="color: var(--blue);">{{ bill.bill_id }}</a>
+                            {% else %}
+                            {{ bill.bill_id }}
+                            {% endif %}
+                        </td>
+                        <td style="max-width: 300px; white-space: normal;">{{ bill.title }}</td>
+                        <td>{{ bill.sponsor_name or '-' }}</td>
+                        <td>{{ bill.introduced_date.strftime('%Y-%m-%d') if bill.introduced_date else '-' }}</td>
+                        <td>{{ bill.last_action_date.strftime('%Y-%m-%d') if bill.last_action_date else '-' }}</td>
+                        <td style="max-width: 150px; white-space: normal; font-size: 0.75rem;">{{ bill.status or '-' }}</td>
+                        <td>
+                            {% if bill.sectors_affected %}
+                            {% for sector in bill.sectors_affected %}
+                            <span class="badge" style="background: rgba(59,130,246,0.15); color: var(--blue); margin: 1px;">{{ sector }}</span>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No legislation data loaded yet.</p>
+                <p>Run the Legislation scraper from the Admin page (requires congress.gov API key).</p>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

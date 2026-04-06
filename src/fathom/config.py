@@ -12,8 +12,14 @@ class Settings(BaseSettings):
     price_lookback_days: int = 5
     sector_cache_ttl_days: int = 30
 
+    # Congress.gov API
+    congress_api_key: str = ""
+
     # Scheduler
     edgar_scrape_interval_minutes: int = 15
+    congressional_scrape_interval_hours: int = 24
+    committee_scrape_interval_hours: int = 168  # weekly
+    legislation_scrape_interval_hours: int = 24
 
     # Dashboard
     dashboard_trade_limit: int = 100

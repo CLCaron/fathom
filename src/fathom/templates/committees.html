@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Committees - Financial Signals{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value">{{ memberships | length }}</div>
+            <div class="stat-label">Total Members</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ committee_counts | length }}</div>
+            <div class="stat-label">Committees</div>
+        </div>
+    </div>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form method="get" action="/congressional/committees">
+                <div class="filter-group">
+                    <label>Chamber</label>
+                    <select name="chamber" onchange="this.form.submit()">
+                        <option value="">All</option>
+                        <option value="HOUSE" {% if filters.chamber == 'HOUSE' %}selected{% endif %}>House</option>
+                        <option value="SENATE" {% if filters.chamber == 'SENATE' %}selected{% endif %}>Senate</option>
+                    </select>
+                </div>
+            </form>
+
+            <h3 style="margin-top: 1rem;">Committees</h3>
+            <div class="committee-list">
+                {% for name, count in committee_counts %}
+                <div class="text-muted" style="font-size: 0.8rem; margin-bottom: 0.25rem;">
+                    {{ name }} ({{ count }})
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
+
+        <section class="main-content">
+            <div class="section-header">
+                <h2>Committee Memberships</h2>
+            </div>
+
+            {% if memberships %}
+            <table class="trades-table">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Chamber</th>
+                        <th>Committee</th>
+                        <th>Role</th>
+                        <th>Sectors Covered</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in memberships %}
+                    <tr class="trade-row">
+                        <td>{{ m.member_name }}</td>
+                        <td>{{ m.chamber | title }}</td>
+                        <td>{{ m.committee_name }}</td>
+                        <td>
+                            {% if m.role == 'CHAIR' %}
+                            <span class="badge badge-purchase">Chair</span>
+                            {% elif m.role == 'RANKING_MEMBER' %}
+                            <span class="badge badge-sale">Ranking</span>
+                            {% else %}
+                            Member
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if m.sectors_covered %}
+                            {{ m.sectors_covered | join(', ') }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No committee data loaded yet.</p>
+                <p>Run the Committee scraper from the Admin page (requires congress.gov API key).</p>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

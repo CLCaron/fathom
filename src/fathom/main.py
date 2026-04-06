@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from fathom.api.signals import router as signals_router
 from fathom.api.admin import router as admin_router
+from fathom.api.congressional import router as congressional_router
 from fathom.config import settings
 from fathom.database import engine
 from fathom.scheduler.jobs import scheduler, setup_scheduler
@@ -71,6 +72,7 @@ app.mount("/static", StaticFiles(directory="src/fathom/static"), name="static")
 
 # Include routers
 app.include_router(signals_router)
+app.include_router(congressional_router)
 app.include_router(admin_router)
 
 

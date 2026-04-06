@@ -16,6 +16,18 @@
                 <div class="stat-value">{{ db_stats.stock_prices }}</div>
                 <div class="stat-label">Price Records</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.congressional_trades }}</div>
+                <div class="stat-label">Congressional Trades</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.committee_memberships }}</div>
+                <div class="stat-label">Committee Members</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.legislation }}</div>
+                <div class="stat-label">Bills Tracked</div>
+            </div>
         </div>
     </div>
 
@@ -31,11 +43,59 @@
                         hx-post="/admin/run/edgar_scraper"
                         hx-target="#edgar-result"
                         hx-swap="innerHTML"
-                        hx-indicator="#edgar-spinner">
-                    Run Now
+                        hx-disabled-elt="this">
+                    <span class="btn-label">Run Now</span>
+                    <span class="btn-loading">Running...</span>
                 </button>
-                <span id="edgar-spinner" class="htmx-indicator">Running...</span>
                 <div id="edgar-result" class="scraper-result"></div>
+            </div>
+
+            <div class="scraper-card">
+                <div class="scraper-info">
+                    <strong>Capitol Trades</strong>
+                    <p>Congressional stock trades (House and Senate STOCK Act disclosures)</p>
+                </div>
+                <button class="btn"
+                        hx-post="/admin/run/congressional_scraper"
+                        hx-target="#congressional-result"
+                        hx-swap="innerHTML"
+                        hx-disabled-elt="this">
+                    <span class="btn-label">Run Now</span>
+                    <span class="btn-loading">Running...</span>
+                </button>
+                <div id="congressional-result" class="scraper-result"></div>
+            </div>
+
+            <div class="scraper-card">
+                <div class="scraper-info">
+                    <strong>Congress.gov Committees</strong>
+                    <p>Committee memberships and sector coverage (requires API key)</p>
+                </div>
+                <button class="btn"
+                        hx-post="/admin/run/committee_scraper"
+                        hx-target="#committee-result"
+                        hx-swap="innerHTML"
+                        hx-disabled-elt="this">
+                    <span class="btn-label">Run Now</span>
+                    <span class="btn-loading">Running...</span>
+                </button>
+                <div id="committee-result" class="scraper-result"></div>
+            </div>
+
+            <div class="scraper-card">
+                <div class="scraper-info">
+                    <strong>Congress.gov Legislation</strong>
+                    <p>Bills, votes, and sector tagging (requires API key)</p>
+                </div>
+                <button class="btn"
+                        hx-post="/admin/run/legislation_scraper"
+                        hx-target="#legislation-result"
+                        hx-swap="innerHTML"
+                        hx-disabled-elt="this">
+                    <span class="btn-label">Run Now</span>
+                    <span class="btn-loading">Running...</span>
+                </button>
+                <div id="legislation-result" class="scraper-result"></div>
             </div>
         </div>
     </div>
