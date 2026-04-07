@@ -75,6 +75,23 @@ http://127.0.0.1:8000/congressional shows congressional stock trades with filter
 
 http://127.0.0.1:8000/admin shows database stats and lets you manually trigger any scraper. Buttons show loading state and formatted results.
 
+### Historical Backfill
+
+Two scripts in `scripts/` pull historical data beyond the scheduled scrapers' normal window:
+
+```bash
+# Full Capitol Trades history (about 50 minutes)
+python scripts/backfill_capitol_trades.py
+
+# EDGAR backfill for a single CIK (for testing)
+python scripts/backfill_edgar.py --cik 320193
+
+# Full EDGAR backfill across all tracked CIKs (1-3 hours)
+python scripts/backfill_edgar.py --since 2020-01-01
+```
+
+Both scripts are idempotent and safe to re-run.
+
 ## Tech Stack
 
 - **Python 3.12** with FastAPI

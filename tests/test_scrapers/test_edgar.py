@@ -86,6 +86,150 @@ class TestGetRecentForm4Filings:
         assert filings == []
 
 
+class TestGetForm4FilingsSince:
+    async def test_recent_only(self, scraper):
+        """Should return Form 4 filings from the recent block only."""
+        response = make_httpx_response(json_data=SAMPLE_SUBMISSIONS_JSON)
+        scraper._fetch = AsyncMock(return_value=response)
+
+        filings = await scraper.get_form4_filings_since(
+            "320193", since=date(2026, 1, 1), include_archive=False
+        )
+
+        # 3 Form 4 filings in SAMPLE_SUBMISSIONS_JSON, all >= 2026-01-01
+        assert len(filings) == 3
+        scraper._fetch.assert_called_once()
+
+    async def test_since_filters_out_older(self, scraper):
+        """Filings older than `since` should be excluded."""
+        response = make_httpx_response(json_data=SAMPLE_SUBMISSIONS_JSON)
+        scraper._fetch = AsyncMock(return_value=response)
+
+        filings = await scraper.get_form4_filings_since(
+            "320193", since=date(2026, 3, 1), include_archive=False
+        )
+
+        # Only 2 filings are on/after 2026-03-01 (2026-03-28 and 2026-03-15)
+        assert len(filings) == 2
+
+    async def test_archive_descent(self, scraper):
+        """Should descend into archive files when more data may exist."""
+        # Recent block with oldest entry still >= cutoff -> signal to check archive
+        submissions_with_archive = {
+            "filings": {
+                "recent": {
+                    "form": ["4"],
+                    "filingDate": ["2022-06-15"],
+                    "accessionNumber": ["0000320193-22-000001"],
+                    "primaryDocument": ["recent.xml"],
+                },
+                "files": [
+                    {
+                        "name": "CIK0000320193-submissions-001.json",
+                        "filingCount": 500,
+                        "filingFrom": "2019-01-01",
+                        "filingTo": "2022-06-14",
+                    },
+                ],
+            }
+        }
+        archive_data = {
+            "form": ["4", "4"],
+            "filingDate": ["2021-03-15", "2020-11-20"],
+            "accessionNumber": ["0000320193-21-000001", "0000320193-20-000001"],
+            "primaryDocument": ["arch1.xml", "arch2.xml"],
+        }
+
+        call_log = []
+
+        async def mock_fetch(url, **kwargs):
+            call_log.append(url)
+            if "submissions-001" in url:
+                return make_httpx_response(json_data=archive_data)
+            return make_httpx_response(json_data=submissions_with_archive)
+
+        scraper._fetch = AsyncMock(side_effect=mock_fetch)
+
+        filings = await scraper.get_form4_filings_since(
+            "320193", since=date(2020, 1, 1), include_archive=True
+        )
+
+        # 1 from recent + 2 from archive = 3
+        assert len(filings) == 3
+        assert scraper._fetch.call_count == 2
+
+    async def test_archive_skipped_when_filing_to_before_cutoff(self, scraper):
+        """Archive files entirely before cutoff should not be fetched."""
+        submissions = {
+            "filings": {
+                "recent": {
+                    "form": ["4"],
+                    "filingDate": ["2022-06-15"],
+                    "accessionNumber": ["0000320193-22-000001"],
+                    "primaryDocument": ["recent.xml"],
+                },
+                "files": [
+                    {
+                        "name": "CIK0000320193-submissions-001.json",
+                        "filingCount": 500,
+                        "filingFrom": "2015-01-01",
+                        "filingTo": "2019-12-31",  # entirely before 2020-01-01 cutoff
+                    },
+                ],
+            }
+        }
+        response = make_httpx_response(json_data=submissions)
+        scraper._fetch = AsyncMock(return_value=response)
+
+        filings = await scraper.get_form4_filings_since(
+            "320193", since=date(2020, 1, 1), include_archive=True
+        )
+
+        # Only the recent block, archive is skipped without fetching
+        assert len(filings) == 1
+        # Only the main submissions URL was fetched
+        assert scraper._fetch.call_count == 1
+
+    async def test_include_archive_false_skips_files(self, scraper):
+        """include_archive=False should never fetch archive files."""
+        submissions = {
+            "filings": {
+                "recent": {
+                    "form": ["4"],
+                    "filingDate": ["2022-06-15"],
+                    "accessionNumber": ["0000320193-22-000001"],
+                    "primaryDocument": ["recent.xml"],
+                },
+                "files": [
+                    {
+                        "name": "CIK0000320193-submissions-001.json",
+                        "filingCount": 500,
+                        "filingFrom": "2019-01-01",
+                        "filingTo": "2022-06-14",
+                    },
+                ],
+            }
+        }
+        response = make_httpx_response(json_data=submissions)
+        scraper._fetch = AsyncMock(return_value=response)
+
+        filings = await scraper.get_form4_filings_since(
+            "320193", since=date(2019, 1, 1), include_archive=False
+        )
+
+        assert len(filings) == 1
+        assert scraper._fetch.call_count == 1
+
+    async def test_fetch_error_returns_empty(self, scraper):
+        """Network errors should return empty list, not raise."""
+        scraper._fetch = AsyncMock(side_effect=Exception("connection failed"))
+
+        filings = await scraper.get_form4_filings_since(
+            "999999", since=date(2020, 1, 1)
+        )
+        assert filings == []
+
+
 class TestParseForm4Xml:
     def test_buy(self, scraper):
         """Should parse a purchase transaction correctly."""

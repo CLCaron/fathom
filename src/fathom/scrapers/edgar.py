@@ -131,27 +131,37 @@ class EdgarScraper(BaseScraper):
             logger.warning(f"Failed to fetch submissions for CIK {cik}: {e}")
             return []
 
-        recent = data.get("filings", {}).get("recent", {})
-        forms = recent.get("form", [])
-        filing_dates = recent.get("filingDate", [])
-        accession_numbers = recent.get("accessionNumber", [])
-        primary_docs = recent.get("primaryDocument", [])
-
         cutoff = (date.today() - timedelta(days=days_back)).isoformat()
-        filings = []
+        recent = data.get("filings", {}).get("recent", {})
+        return self._extract_form4_from_block(recent, cik, cutoff)
 
+    def _extract_form4_from_block(
+        self, block: dict, cik: str, cutoff_iso: str | None
+    ) -> list[dict]:
+        """Extract Form 4 filings from a submissions block (recent or archive file).
+
+        block: a dict with parallel arrays form, filingDate, accessionNumber,
+               primaryDocument (same shape in `recent` and archive files).
+        cutoff_iso: ISO date string. Entries with filing_date < cutoff are skipped.
+                    Pass None to include everything.
+        """
+        forms = block.get("form", [])
+        filing_dates = block.get("filingDate", [])
+        accession_numbers = block.get("accessionNumber", [])
+        primary_docs = block.get("primaryDocument", [])
+
+        filings: list[dict] = []
         for i, form_type in enumerate(forms):
             if form_type != "4":
                 continue
-            if i >= len(filing_dates) or filing_dates[i] < cutoff:
+            if i >= len(filing_dates):
+                continue
+            if cutoff_iso and filing_dates[i] < cutoff_iso:
                 continue
 
             accession = accession_numbers[i].replace("-", "")
             primary = primary_docs[i]
-
-            # Strip the XSLT prefix if present (e.g., "xslF345X05/filename.xml")
             raw_filename = primary.split("/")[-1] if "/" in primary else primary
-
             xml_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{raw_filename}"
             filings.append({
                 "xml_url": xml_url,
@@ -159,8 +169,65 @@ class EdgarScraper(BaseScraper):
                 "accession": accession_numbers[i],
                 "cik": cik,
             })
-
         return filings
+
+    async def get_form4_filings_since(
+        self, cik: str, since: date, include_archive: bool = True
+    ) -> list[dict]:
+        """Get all Form 4 filings for a CIK on or after `since`.
+
+        Walks the recent submissions block first, then walks the older
+        `files` archive if include_archive is True and more data may exist.
+        """
+        padded_cik = cik.zfill(10)
+        url = f"https://data.sec.gov/submissions/CIK{padded_cik}.json"
+
+        try:
+            response = await self._fetch(url, headers=self._headers)
+            data = response.json()
+        except Exception as e:
+            logger.warning(f"Failed to fetch submissions for CIK {cik}: {e}")
+            return []
+
+        cutoff_iso = since.isoformat()
+        filings_block = data.get("filings", {})
+        recent = filings_block.get("recent", {})
+        all_filings = self._extract_form4_from_block(recent, cik, cutoff_iso)
+
+        # Determine whether we need to descend into archive files.
+        # If the oldest recent entry is still after cutoff, we may have more.
+        recent_dates = recent.get("filingDate", [])
+        oldest_recent = recent_dates[-1] if recent_dates else None
+        need_archive = include_archive and (
+            oldest_recent is None or oldest_recent >= cutoff_iso
+        )
+
+        if need_archive:
+            archive_files = filings_block.get("files", [])
+            for archive in archive_files:
+                # Archive files list date range; skip ones entirely before cutoff
+                filing_to = archive.get("filingTo", "")
+                if filing_to and filing_to < cutoff_iso:
+                    continue
+
+                archive_name = archive.get("name")
+                if not archive_name:
+                    continue
+
+                archive_url = f"https://data.sec.gov/submissions/{archive_name}"
+                try:
+                    archive_resp = await self._fetch(archive_url, headers=self._headers)
+                    archive_data = archive_resp.json()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch archive {archive_name}: {e}")
+                    continue
+
+                archive_filings = self._extract_form4_from_block(
+                    archive_data, cik, cutoff_iso
+                )
+                all_filings.extend(archive_filings)
+
+        return all_filings
 
     async def _fetch_and_parse_form4(self, filing: dict) -> list[InsiderTradeItem]:
         """Fetch and parse a Form 4 XML document."""
