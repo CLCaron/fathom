@@ -11,6 +11,7 @@ from fathom.config import settings
 from fathom.engine.pipeline import (
     run_committees_pipeline,
     run_congressional_pipeline,
+    run_correlation_pipeline,
     run_edgar_pipeline,
     run_legislation_pipeline,
 )
@@ -71,6 +72,7 @@ async def run_job_now(job_id: str) -> str:
         "congressional_scraper": run_congressional_pipeline,
         "committee_scraper": run_committees_pipeline,
         "legislation_scraper": run_legislation_pipeline,
+        "correlation_engine": run_correlation_pipeline,
     }
 
     func = job_map.get(job_id)

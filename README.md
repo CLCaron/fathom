@@ -11,18 +11,24 @@ A financial research tool that connects insider trades, congressional trades, an
 
 **Congressional trade tracking:**
 - Scrapes Capitol Trades for House and Senate STOCK Act disclosures
-- Committee membership data from congress.gov (with sector coverage mapping)
+- Committee membership data from the unitedstates/congress-legislators project (with sector coverage mapping)
 - Legislation tracking with keyword-based sector tagging
 - Dedicated congressional trades dashboard with chamber, party, and sector filters
 
+**Correlation engine:**
+- Committee-trade overlap detection: flags when a member trades in a sector their committee oversees
+- Legislation timing detection: flags trades near relevant bill actions or votes
+- Confidence scoring with weighted evidence (role, timing proximity, sponsorship)
+- Signal feed dashboard with expandable detail cards and "Why this matters" explanations
+- Candidates view for low-confidence signals while thresholds are being tuned
+
 **Automated scheduling:**
 - SEC EDGAR scraper runs every 15 minutes
-- Capitol Trades scraper runs daily
+- Capitol Trades scraper runs daily, then auto-runs correlation
 - Committee and legislation scrapers run on configurable intervals
-- All scrapers can be triggered manually from the admin page
+- All scrapers and the correlation engine can be triggered manually from the admin page
 
 **Planned:**
-- Correlation engine linking congressional trades to committee oversight and legislation timing
 - Event analysis system: log a news event and see how similar events played out historically
 - Market context engine for meaningful historical comparisons
 - Trade clustering detection (multiple actors, same sector, same timeframe)
@@ -71,9 +77,13 @@ The main page shows recent insider trades with filters for time range, trade typ
 
 http://127.0.0.1:8000/congressional shows congressional stock trades with filters for chamber, party, trade type, and sector. Committee memberships and legislation are available as sub-pages.
 
+### Signals
+
+http://127.0.0.1:8000/signals shows correlated signals from the correlation engine. Filter by signal type, sector, confidence, and time range. Toggle "Show candidates" to see below-threshold signals. Click any card to expand details and see the "Why this matters" explanation.
+
 ### Admin
 
-http://127.0.0.1:8000/admin shows database stats and lets you manually trigger any scraper. Buttons show loading state and formatted results.
+http://127.0.0.1:8000/admin shows database stats and lets you manually trigger any scraper or the correlation engine. Buttons show loading state and formatted results.
 
 ### Historical Backfill
 

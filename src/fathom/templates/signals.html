@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Signals - Financial Signals{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.above_threshold }}</div>
+            <div class="stat-label">Active Signals</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total (incl. candidates)</div>
+        </div>
+    </div>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <h3>Filters</h3>
+            <form id="signal-filter-form" hx-get="/api/signals/feed" hx-target="#signal-cards" hx-swap="innerHTML">
+                <div class="filter-group">
+                    <label>Time Range</label>
+                    <select name="days" onchange="this.form.requestSubmit()">
+                        <option value="7" {% if filters.days == 7 %}selected{% endif %}>Last 7 days</option>
+                        <option value="14" {% if filters.days == 14 %}selected{% endif %}>Last 14 days</option>
+                        <option value="30" {% if filters.days == 30 %}selected{% endif %}>Last 30 days</option>
+                        <option value="90" {% if filters.days == 90 %}selected{% endif %}>Last 90 days</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Signal Type</label>
+                    <select name="signal_type" onchange="this.form.requestSubmit()">
+                        <option value="">All Types</option>
+                        {% for type_name, count in type_counts %}
+                        <option value="{{ type_name }}" {% if filters.signal_type == type_name %}selected{% endif %}>
+                            {{ type_labels.get(type_name, type_name) }} ({{ count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>Sector</label>
+                    <select name="sector" onchange="this.form.requestSubmit()">
+                        <option value="">All Sectors</option>
+                        {% for sector_name, count in sector_counts %}
+                        <option value="{{ sector_name }}" {% if filters.sector == sector_name %}selected{% endif %}>
+                            {{ sector_name }} ({{ count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>
+                        <input type="checkbox" name="show_candidates" value="true"
+                               {% if filters.show_candidates %}checked{% endif %}
+                               onchange="this.form.requestSubmit()">
+                        Show candidates (&lt;{{ min_confidence_setting }})
+                    </label>
+                </div>
+            </form>
+        </aside>
+
+        <section class="main-content">
+            <div class="section-header">
+                <h2>Correlated Signals</h2>
+            </div>
+
+            <div id="signal-cards" class="signal-feed">
+                {% include "components/signal_cards.html" %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

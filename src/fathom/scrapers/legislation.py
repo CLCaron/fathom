@@ -11,34 +11,43 @@ logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.congress.gov/v3"
 
+# Only fetch substantive bill types, skip procedural resolutions
+SUBSTANTIVE_BILL_TYPES = ["hr", "s", "hjres", "sjres"]
+
 # Keyword-to-sector mapping for tagging bills by their text.
 BILL_SECTOR_KEYWORDS: dict[str, list[str]] = {
     "Defense": [
         "defense", "military", "armed forces", "weapons", "pentagon",
         "veteran", "national security", "army", "navy", "air force",
+        "intelligence", "surveillance", "missile", "nuclear weapon",
     ],
     "Energy": [
         "oil", "gas", "energy", "pipeline", "drilling", "renewable",
-        "solar", "wind", "nuclear", "fossil fuel", "petroleum",
+        "solar", "wind", "nuclear energy", "fossil fuel", "petroleum",
+        "electric grid", "power plant", "lng", "natural gas",
     ],
     "Healthcare": [
         "pharmaceutical", "drug", "health", "medicare", "medicaid",
         "fda", "hospital", "medical", "vaccine", "biotech",
+        "opioid", "mental health", "prescription", "insurance",
     ],
     "Technology": [
         "cyber", "data privacy", "artificial intelligence", "semiconductor",
         "broadband", "internet", "software", "telecom", "digital",
+        "technology", "computing", "spectrum", "5g",
     ],
     "Finance": [
         "banking", "financial", "securities", "credit", "insurance",
         "wall street", "federal reserve", "monetary", "treasury",
+        "tax", "tariff", "trade agreement", "irs",
     ],
     "Consumer": [
         "consumer protection", "retail", "food safety", "product safety",
+        "agriculture", "farming", "food", "nutrition",
     ],
     "Industrial": [
         "infrastructure", "transportation", "manufacturing", "construction",
-        "highway", "railroad", "aviation",
+        "highway", "railroad", "aviation", "shipping", "port",
     ],
 }
 
@@ -75,10 +84,10 @@ class VoteItem(ScrapedItem):
 class LegislationScraper(BaseScraper):
     """Scrapes bills and votes from congress.gov API."""
 
-    def __init__(self, bill_limit: int = 50):
+    def __init__(self, bills_per_type: int = 100):
         super().__init__(rate_limit_delay=0.5, max_retries=3)
         self._api_key = settings.congress_api_key
-        self._bill_limit = bill_limit
+        self._bills_per_type = bills_per_type
 
     async def scrape(self) -> tuple[list[BillItem], list[VoteItem]]:
         """Fetch recent bills and votes."""
@@ -96,32 +105,32 @@ class LegislationScraper(BaseScraper):
         return bills, votes
 
     async def _fetch_bills(self) -> list[BillItem]:
-        """Fetch recent bills from congress.gov."""
+        """Fetch recent substantive bills by type."""
         items: list[BillItem] = []
 
-        url = f"{API_BASE}/bill"
-        params = {
-            "api_key": self._api_key,
-            "congress": 119,
-            "sort": "updateDate+desc",
-            "limit": self._bill_limit,
-            "format": "json",
-        }
+        for bill_type in SUBSTANTIVE_BILL_TYPES:
+            url = f"{API_BASE}/bill/119/{bill_type}"
+            params = {
+                "api_key": self._api_key,
+                "sort": "updateDate+desc",
+                "limit": self._bills_per_type,
+                "format": "json",
+            }
 
-        try:
-            response = await self._fetch(url, params=params)
-            data = response.json()
-        except Exception as e:
-            logger.error(f"Failed to fetch bills: {e}")
-            return items
-
-        for bill_data in data.get("bills", []):
             try:
-                item = self._parse_bill(bill_data)
-                if item:
-                    items.append(item)
+                response = await self._fetch(url, params=params)
+                data = response.json()
             except Exception as e:
-                logger.warning(f"Failed to parse bill: {e}")
+                logger.error(f"Failed to fetch {bill_type} bills: {e}")
+                continue
+
+            for bill_data in data.get("bills", []):
+                try:
+                    item = self._parse_bill(bill_data)
+                    if item:
+                        items.append(item)
+                except Exception as e:
+                    logger.warning(f"Failed to parse bill: {e}")
 
         return items
 
@@ -135,14 +144,25 @@ class LegislationScraper(BaseScraper):
         bill_id = f"{bill_type}-{bill_number}"
         title = raw.get("title", "")
 
+        # Skip placeholder/reserved bills
+        title_lower = title.lower().strip()
+        if title_lower.startswith("reserved"):
+            return None
+
         # Parse dates
         introduced = self._parse_date(raw.get("introducedDate"))
-        last_action_date = self._parse_date(raw.get("latestAction", {}).get("actionDate"))
+        last_action_date = self._parse_date(
+            raw.get("latestAction", {}).get("actionDate")
+        )
 
         # Status from latest action
-        status = raw.get("latestAction", {}).get("text", "")[:50] if raw.get("latestAction") else None
+        status = (
+            raw.get("latestAction", {}).get("text", "")[:50]
+            if raw.get("latestAction")
+            else None
+        )
 
-        # Tag sectors
+        # Tag sectors from title
         sectors = self._tag_sectors(title)
 
         # Sponsor
@@ -193,7 +213,7 @@ class LegislationScraper(BaseScraper):
         return items
 
     async def _parse_vote(self, raw: dict, chamber: str) -> list[VoteItem]:
-        """Parse a vote record — fetches individual member votes if a bill is linked."""
+        """Parse a vote record -- fetches individual member votes if a bill is linked."""
         items: list[VoteItem] = []
 
         # Only process votes linked to bills

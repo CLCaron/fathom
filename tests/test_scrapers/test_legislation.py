@@ -118,7 +118,7 @@ class TestScrapeSkipsWithoutKey:
 
 class TestFetchBills:
     async def test_fetches_and_parses_bills(self):
-        scraper = LegislationScraper()
+        scraper = LegislationScraper(bills_per_type=50)
         scraper._api_key = "test-key"
 
         resp = make_httpx_response(json_data=SAMPLE_BILLS_RESPONSE)
@@ -126,9 +126,9 @@ class TestFetchBills:
         with patch.object(scraper, "_fetch", new_callable=AsyncMock, return_value=resp):
             bills = await scraper._fetch_bills()
 
-        assert len(bills) == 2
+        # 4 bill types (hr, s, hjres, sjres) x 2 bills each = 8
+        assert len(bills) == 8
         assert bills[0].bill_id == "HR-1234"
-        assert bills[1].bill_id == "S-567"
         await scraper.close()
 
     async def test_handles_fetch_error(self):
@@ -143,6 +143,26 @@ class TestFetchBills:
             bills = await scraper._fetch_bills()
 
         assert bills == []
+        await scraper.close()
+
+    async def test_skips_reserved_bills(self):
+        scraper = LegislationScraper()
+        reserved_response = {
+            "bills": [
+                {"type": "HR", "number": "6", "title": "Reserved for the Speaker.",
+                 "congress": 119, "latestAction": None, "sponsors": []},
+                {"type": "HR", "number": "100", "title": "Actual Policy Bill",
+                 "congress": 119, "latestAction": None, "sponsors": []},
+            ]
+        }
+        resp = make_httpx_response(json_data=reserved_response)
+
+        with patch.object(scraper, "_fetch", new_callable=AsyncMock, return_value=resp):
+            bills = await scraper._fetch_bills()
+
+        # "Reserved" bill is skipped, only "Actual Policy Bill" x 4 types
+        titles = [b.title for b in bills]
+        assert all("Reserved" not in t for t in titles)
         await scraper.close()
 
 

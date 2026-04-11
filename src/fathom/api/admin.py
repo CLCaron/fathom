@@ -9,6 +9,7 @@ from fathom.models.committee_membership import CommitteeMembership
 from fathom.models.congressional_trade import CongressionalTrade
 from fathom.models.insider_trade import InsiderTrade
 from fathom.models.legislation import Legislation
+from fathom.models.signal import Signal
 from fathom.models.stock_price import StockPrice
 from fathom.scheduler.jobs import run_job_now
 
@@ -27,6 +28,7 @@ async def admin_page(request: Request):
         congress_count = await session.execute(select(func.count(CongressionalTrade.id)))
         committee_count = await session.execute(select(func.count(CommitteeMembership.id)))
         legislation_count = await session.execute(select(func.count(Legislation.id)))
+        signal_count = await session.execute(select(func.count(Signal.id)))
 
     db_stats = {
         "insider_trades": trade_count.scalar() or 0,
@@ -34,6 +36,7 @@ async def admin_page(request: Request):
         "congressional_trades": congress_count.scalar() or 0,
         "committee_memberships": committee_count.scalar() or 0,
         "legislation": legislation_count.scalar() or 0,
+        "signals": signal_count.scalar() or 0,
     }
 
     return templates.TemplateResponse(

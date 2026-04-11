@@ -1,0 +1,88 @@
+{% if signals %}
+{% for signal in signals %}
+<div class="signal-card {% if signal.confidence >= 60 %}signal-high{% elif signal.confidence >= min_confidence_setting %}signal-medium{% else %}signal-candidate{% endif %}">
+    <div class="signal-header">
+        <span class="confidence-pill {% if signal.confidence >= 60 %}pill-green{% elif signal.confidence >= min_confidence_setting %}pill-amber{% else %}pill-gray{% endif %}">
+            {{ "%.0f"|format(signal.confidence) }}
+        </span>
+        <span class="signal-type-tag">{{ type_labels.get(signal.signal_type, signal.signal_type) }}</span>
+        {% if signal.sector %}
+        <span class="signal-sector">{{ signal.sector }}</span>
+        {% endif %}
+        <span class="signal-date">{{ signal.detected_at.strftime('%b %d') }}</span>
+    </div>
+
+    <div class="signal-headline">{{ signal.headline }}</div>
+
+    <details class="signal-details">
+        <summary>Details</summary>
+        <div class="signal-details-content">
+            {% if signal.details %}
+            {% if signal.details.get('explanation') %}
+            <div class="signal-explanation">
+                <strong>Why this matters:</strong> {{ signal.details['explanation'] }}
+            </div>
+            {% endif %}
+
+            <div class="signal-evidence">
+                {% if signal.signal_type == 'COMMITTEE_TRADE' %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Committee:</span>
+                    <span>{{ signal.details.get('committee_name', '') }}</span>
+                </div>
+                <div class="evidence-row">
+                    <span class="evidence-label">Role:</span>
+                    <span>{{ signal.details.get('role', '') }}</span>
+                </div>
+                <div class="evidence-row">
+                    <span class="evidence-label">Trade:</span>
+                    <span>{{ signal.details.get('trade_type', '') }} {{ signal.details.get('ticker', '') }}</span>
+                </div>
+                {% if signal.details.get('amount_min') %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Amount:</span>
+                    <span>${{ "{:,.0f}".format(signal.details.get('amount_min', 0)) }} - ${{ "{:,.0f}".format(signal.details.get('amount_max', 0)) }}</span>
+                </div>
+                {% endif %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Trade Date:</span>
+                    <span>{{ signal.details.get('trade_date', '') }}</span>
+                </div>
+                {% elif signal.signal_type == 'LEGISLATION_TIMING' %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Bill:</span>
+                    <span>{{ signal.details.get('bill_id', '') }}</span>
+                </div>
+                <div class="evidence-row">
+                    <span class="evidence-label">Bill Title:</span>
+                    <span>{{ signal.details.get('bill_title', '')[:80] }}</span>
+                </div>
+                <div class="evidence-row">
+                    <span class="evidence-label">Proximity:</span>
+                    <span>{{ signal.details.get('proximity_days', 0)|abs }} days {{ 'before' if signal.details.get('proximity_days', 0) < 0 else 'after' }} bill action</span>
+                </div>
+                {% if signal.details.get('member_voted') %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Member Vote:</span>
+                    <span>{{ signal.details.get('member_voted', '') }} ({{ signal.details.get('member_vote_date', '') }})</span>
+                </div>
+                {% endif %}
+                {% if signal.details.get('is_sponsor') %}
+                <div class="evidence-row">
+                    <span class="evidence-label">Sponsor:</span>
+                    <span>Yes (sponsor bonus applied)</span>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </details>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <p>No signals found for the current filters.</p>
+    <p class="text-muted">Try expanding the time range or adjusting filters.</p>
+</div>
+{% endif %}

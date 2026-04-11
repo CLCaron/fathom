@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fathom.config import settings
@@ -15,6 +15,11 @@ from fathom.models.signal import Signal
 
 router = APIRouter()
 templates = Jinja2Templates(directory="src/fathom/templates")
+
+SIGNAL_TYPE_LABELS = {
+    "COMMITTEE_TRADE": "Committee Overlap",
+    "LEGISLATION_TIMING": "Legislation Timing",
+}
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -121,4 +126,126 @@ async def trades_partial(
         request,
         "components/trades_table.html",
         {"trades": trades},
+    )
+
+
+@router.get("/signals", response_class=HTMLResponse)
+async def signals_feed(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    signal_type: str | None = None,
+    sector: str | None = None,
+    min_confidence: int = Query(default=0, ge=0, le=100),
+    days: int = Query(default=30, ge=1, le=settings.dashboard_max_days),
+    show_candidates: bool = False,
+):
+    """Signal feed page showing correlated signals."""
+    since = date.today() - timedelta(days=days)
+
+    query = (
+        select(Signal)
+        .where(Signal.detected_at >= since)
+        .order_by(desc(Signal.confidence), desc(Signal.detected_at))
+    )
+
+    if signal_type:
+        query = query.where(Signal.signal_type == signal_type)
+    if sector:
+        query = query.where(Signal.sector == sector)
+    if not show_candidates:
+        query = query.where(Signal.confidence >= settings.min_confidence)
+    if min_confidence > 0:
+        query = query.where(Signal.confidence >= min_confidence)
+
+    query = query.limit(200)
+    result = await session.execute(query)
+    signals = result.scalars().all()
+
+    # Stats
+    total_q = select(func.count(Signal.id)).where(Signal.detected_at >= since)
+    total = (await session.execute(total_q)).scalar() or 0
+
+    above_threshold_q = total_q.where(Signal.confidence >= settings.min_confidence)
+    above_threshold = (await session.execute(above_threshold_q)).scalar() or 0
+
+    # Sector counts for filter
+    sector_q = (
+        select(Signal.sector, func.count(Signal.id))
+        .where(Signal.detected_at >= since)
+        .where(Signal.sector.isnot(None))
+        .group_by(Signal.sector)
+        .order_by(desc(func.count(Signal.id)))
+    )
+    sector_counts = (await session.execute(sector_q)).all()
+
+    # Signal type counts for filter
+    type_q = (
+        select(Signal.signal_type, func.count(Signal.id))
+        .where(Signal.detected_at >= since)
+        .group_by(Signal.signal_type)
+        .order_by(desc(func.count(Signal.id)))
+    )
+    type_counts = (await session.execute(type_q)).all()
+
+    return templates.TemplateResponse(
+        request,
+        "signals.html",
+        {
+            "signals": signals,
+            "stats": {"total": total, "above_threshold": above_threshold},
+            "sector_counts": sector_counts,
+            "type_counts": type_counts,
+            "type_labels": SIGNAL_TYPE_LABELS,
+            "min_confidence_setting": settings.min_confidence,
+            "filters": {
+                "signal_type": signal_type,
+                "sector": sector,
+                "min_confidence": min_confidence,
+                "days": days,
+                "show_candidates": show_candidates,
+            },
+        },
+    )
+
+
+@router.get("/api/signals/feed", response_class=HTMLResponse)
+async def signals_feed_partial(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    signal_type: str | None = None,
+    sector: str | None = None,
+    min_confidence: int = Query(default=0, ge=0, le=100),
+    days: int = Query(default=30, ge=1, le=settings.dashboard_max_days),
+    show_candidates: bool = False,
+):
+    """HTMX partial: returns just the signal cards."""
+    since = date.today() - timedelta(days=days)
+
+    query = (
+        select(Signal)
+        .where(Signal.detected_at >= since)
+        .order_by(desc(Signal.confidence), desc(Signal.detected_at))
+    )
+
+    if signal_type:
+        query = query.where(Signal.signal_type == signal_type)
+    if sector:
+        query = query.where(Signal.sector == sector)
+    if not show_candidates:
+        query = query.where(Signal.confidence >= settings.min_confidence)
+    if min_confidence > 0:
+        query = query.where(Signal.confidence >= min_confidence)
+
+    query = query.limit(200)
+    result = await session.execute(query)
+    signals = result.scalars().all()
+
+    return templates.TemplateResponse(
+        request,
+        "components/signal_cards.html",
+        {
+            "signals": signals,
+            "type_labels": SIGNAL_TYPE_LABELS,
+            "min_confidence_setting": settings.min_confidence,
+        },
     )

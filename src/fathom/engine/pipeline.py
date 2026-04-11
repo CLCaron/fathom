@@ -1,21 +1,28 @@
-"""Data pipeline: scrape -> normalize -> store."""
+"""Data pipeline: scrape -> normalize -> store -> correlate."""
 
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import yfinance as yf
-from sqlalchemy import select
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fathom.config import settings
 from fathom.database import async_session
+from fathom.engine.correlator import (
+    SignalCandidate,
+    find_committee_overlap_signals,
+    find_legislation_timing_signals,
+    merge_candidates,
+)
 from fathom.models.committee_membership import CommitteeMembership
 from fathom.models.congressional_trade import CongressionalTrade
 from fathom.models.insider_trade import InsiderTrade
 from fathom.models.legislation import Legislation, LegislationVote
 from fathom.models.sector_cache import SectorCache
+from fathom.models.signal import Signal
 from fathom.models.stock_price import StockPrice
 from fathom.scrapers.capitol_trades import CapitolTradesScraper, CongressionalTradeItem
 from fathom.scrapers.committees import CommitteeScraper, CommitteeMembershipItem
@@ -24,6 +31,24 @@ from fathom.scrapers.legislation import BillItem, LegislationScraper, VoteItem
 from fathom.scrapers.stock_prices import StockPriceItem, fetch_stock_prices
 
 logger = logging.getLogger(__name__)
+
+# Canonicalize yfinance sector names to our internal vocabulary.
+_SECTOR_ALIASES: dict[str, str] = {
+    "Financial Services": "Finance",
+    "Basic Materials": "Materials",
+    "Communication Services": "Telecom",
+    "Consumer Cyclical": "Consumer",
+    "Consumer Defensive": "Consumer",
+    "Industrials": "Industrial",
+}
+
+
+def canonicalize_sector(value: str | None) -> str | None:
+    """Map yfinance sector names to our canonical vocabulary."""
+    if not value:
+        return None
+    return _SECTOR_ALIASES.get(value, value)
+
 
 SECTOR_MAP = {
     # Energy
@@ -128,7 +153,8 @@ async def _lookup_sector_yfinance(ticker: str) -> str | None:
             return None
 
     with ThreadPoolExecutor() as pool:
-        return await loop.run_in_executor(pool, _fetch)
+        raw = await loop.run_in_executor(pool, _fetch)
+    return canonicalize_sector(raw)
 
 
 async def run_edgar_pipeline():
@@ -234,13 +260,15 @@ async def _fetch_and_store_prices(tickers: list[str]):
 
 
 async def run_congressional_pipeline():
-    """Scrape Capitol Trades and store congressional trades."""
+    """Scrape Capitol Trades, store trades, then run correlation engine."""
     scraper = CapitolTradesScraper(lookback_days=settings.dashboard_max_days)
 
     try:
         items = await scraper.scrape()
         if not items:
             logger.info("No new congressional trades found")
+            # Still run correlation -- new committee/legislation data may have arrived
+            await run_correlation_pipeline()
             return 0
 
         new_count = 0
@@ -254,6 +282,10 @@ async def run_congressional_pipeline():
         logger.info(
             f"Stored {new_count} new congressional trades (of {len(items)} scraped)"
         )
+
+        # Run correlation engine after storing trades
+        await run_correlation_pipeline()
+
         return new_count
 
     finally:
@@ -457,4 +489,91 @@ async def _store_vote(session: AsyncSession, item: VoteItem) -> bool:
         vote_date=item.vote_date,
     )
     session.add(vote)
+    return True
+
+
+async def run_correlation_pipeline(lookback_days: int = 90) -> int:
+    """Run the correlation engine over recent congressional trades.
+
+    Finds committee-overlap and legislation-timing signals, scores them,
+    and stores all candidates (regardless of confidence threshold).
+    """
+    since = date.today() - timedelta(days=lookback_days)
+
+    async with async_session() as session:
+        # Fetch recent congressional trades
+        result = await session.execute(
+            select(CongressionalTrade)
+            .where(CongressionalTrade.trade_date >= since)
+            .order_by(desc(CongressionalTrade.trade_date))
+        )
+        trades = list(result.scalars().all())
+
+        if not trades:
+            logger.info("No congressional trades in lookback window")
+            return 0
+
+        logger.info(
+            f"Running correlation on {len(trades)} trades "
+            f"(since {since})"
+        )
+
+        # Run both matchers
+        committee_signals = await find_committee_overlap_signals(session, trades)
+        legislation_signals = await find_legislation_timing_signals(session, trades)
+
+        all_candidates = merge_candidates(committee_signals + legislation_signals)
+
+        # Store signals with dedup
+        new_count = 0
+        for candidate in all_candidates:
+            stored = await _store_signal(session, candidate)
+            if stored:
+                new_count += 1
+
+        await session.commit()
+
+    logger.info(
+        f"Correlation complete: {new_count} new signals stored "
+        f"(of {len(all_candidates)} candidates)"
+    )
+    return new_count
+
+
+async def _store_signal(session: AsyncSession, candidate: SignalCandidate) -> bool:
+    """Store a signal candidate, deduplicating by type+sector+trade+date.
+
+    Returns True if the signal was new and stored.
+    """
+    # Dedupe: same signal_type + sector + source trade within 24h
+    trade_id = candidate.source_trade_ids[0] if candidate.source_trade_ids else None
+    today = date.today()
+
+    existing = await session.execute(
+        select(Signal).where(
+            Signal.signal_type == candidate.signal_type,
+            Signal.sector == candidate.sector,
+            func.date(Signal.detected_at) == today,
+        )
+    )
+    # Check if any existing signal covers the same source trade
+    for sig in existing.scalars().all():
+        existing_ids = sig.source_trade_ids or []
+        if trade_id and trade_id in existing_ids:
+            return False
+
+    signal = Signal(
+        signal_type=candidate.signal_type,
+        ticker=candidate.ticker,
+        sector=candidate.sector,
+        headline=candidate.headline,
+        confidence=candidate.confidence,
+        details={
+            **candidate.details,
+            "explanation": candidate.explanation,
+        },
+        source_trade_ids=candidate.source_trade_ids,
+        detected_at=datetime.utcnow(),
+    )
+    session.add(signal)
     return True

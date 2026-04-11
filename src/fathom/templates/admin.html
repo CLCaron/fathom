@@ -28,6 +28,10 @@
                 <div class="stat-value">{{ db_stats.legislation }}</div>
                 <div class="stat-label">Bills Tracked</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ db_stats.signals }}</div>
+                <div class="stat-label">Signals</div>
+            </div>
         </div>
     </div>
 
@@ -96,6 +100,22 @@
                     <span class="btn-loading">Running...</span>
                 </button>
                 <div id="legislation-result" class="scraper-result"></div>
+            </div>
+
+            <div class="scraper-card">
+                <div class="scraper-info">
+                    <strong>Correlation Engine</strong>
+                    <p>Run committee overlap and legislation timing matchers on recent trades</p>
+                </div>
+                <button class="btn"
+                        hx-post="/admin/run/correlation_engine"
+                        hx-target="#correlation-result"
+                        hx-swap="innerHTML"
+                        hx-disabled-elt="this">
+                    <span class="btn-label">Run Now</span>
+                    <span class="btn-loading">Running...</span>
+                </button>
+                <div id="correlation-result" class="scraper-result"></div>
             </div>
         </div>
     </div>

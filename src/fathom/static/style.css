@@ -370,6 +370,130 @@ body {
     cursor: wait;
 }
 
+/* Signal cards */
+.signal-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.signal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    border-left: 3px solid var(--border);
+}
+
+.signal-high { border-left-color: var(--green); }
+.signal-medium { border-left-color: var(--yellow); }
+.signal-candidate { border-left-color: var(--border); opacity: 0.7; }
+
+.signal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.confidence-pill {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 2rem;
+    text-align: center;
+}
+
+.pill-green { background: var(--green-bg); color: var(--green); }
+.pill-amber { background: rgba(234, 179, 8, 0.1); color: var(--yellow); }
+.pill-gray { background: rgba(139, 143, 163, 0.1); color: var(--text-muted); }
+
+.signal-type-tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    background: var(--bg);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+}
+
+.signal-sector {
+    font-size: 0.75rem;
+    color: var(--blue);
+}
+
+.signal-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.signal-headline {
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.signal-details {
+    margin-top: 0.75rem;
+}
+
+.signal-details summary {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.signal-details summary:hover {
+    color: var(--text);
+}
+
+.signal-details-content {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+
+.signal-explanation {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.signal-evidence {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.evidence-row {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.evidence-label {
+    color: var(--text-muted);
+    min-width: 100px;
+    flex-shrink: 0;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.filter-group input[type="checkbox"] {
+    margin-right: 0.35rem;
+    accent-color: var(--blue);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .dashboard-layout {
